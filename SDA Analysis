@@ -1,0 +1,996 @@
+/* --------------------------------------------------------------------
+   Code written by Boyd E. Owens
+   Six Sigma Black Belt
+   Google / Motorola / Home....soon to be Arris
+   
+   This program generates a Quality drill down report on Jira data. 
+   
+   Coding started 2/5/13 to 2/20/13
+   -------------------------------------------------------------------- */
+
+/* --------------------------------------------------------------------
+   This Process step reads the data values from line chart text file
+   created to make a baseline for graphs. The values within the 
+   temporary text file were extracted from the Excel source file.
+   
+   Source file: D:\Profiles\RXJG63.DSA.000\My
+   Documents\Analytics\CenturyLink\Line_Chart_Month.xlsx
+   Server:      Local File System
+   Output data: WORK.Line_Chart_Month 
+   -------------------------------------------------------------------- */
+
+DATA WORK.Line_Chart_Month;
+    LENGTH
+        month              8
+        zero               8 ;
+    LABEL
+        month            = "Month"
+        zero             = "Zero" ;
+    FORMAT
+        month            MONYY7.
+        zero             BEST12. ;
+    INFORMAT
+        month            MONYY9.
+        zero             BEST12. ;
+    INFILE '/production/output/tempwork/SAS_work259A000066BE_v06k100/#LN00088'
+        LRECL=11
+        ENCODING="LATIN1"
+        TERMSTR=CRLF
+        DLM='7F'x
+        MISSOVER
+        DSD ;
+    INPUT
+        month            : BEST32.
+        zero             : BEST32. ;
+RUN;
+
+  /*----------------------------------------------------------------
+	The following code imports the main data file in excel format.  
+	The main data file is a customer Jira - ODART file on Software
+	Defects ran and downloaded to be available to the system. 
+	------------------------------------------------------------------- */
+
+DATA WORK.Motorola___oDART_R4_Clean_Cherry;
+    LENGTH
+        project          $ 34
+        key              $ 12
+        issue_type       $ 6
+        status           $ 14
+        priority         $ 10
+        resolution       $ 17
+        created            8
+        resolved           8
+        affects_version_s $ 55
+        fix_version_s    $ 67
+        hardware_version_used $ 8
+        impact_analysis  $ 1
+        team_found       $ 24
+        root_cause_analysis $ 1389
+        date_closed        8
+        severity         $ 10
+        defect_source_type $ 32
+        component_s      $ 33 ;
+    LABEL
+        project          = "Project"
+        key              = "Key"
+        issue_type       = "Issue Type"
+        status           = "Status"
+        priority         = "Priority"
+        resolution       = "Resolution"
+        created          = "Created"
+        resolved         = "Resolved"
+        affects_version_s = "Affects Version/s"
+        fix_version_s    = "Fix Version/s"
+        hardware_version_used = "Hardware Version Used"
+        impact_analysis  = "Impact Analysis"
+        team_found       = "Team Found"
+        root_cause_analysis = "Root Cause Analysis"
+        date_closed      = "Date Closed"
+        severity         = "Severity"
+        defect_source_type = "Defect Source Type"
+        component_s      = "Component/s" ;
+    FORMAT
+        project          $CHAR34.
+        key              $CHAR14.
+        issue_type       $CHAR6.
+        status           $CHAR14.
+        priority         $CHAR10.
+        resolution       $CHAR17.
+        created          MONYY7.
+        resolved         MONYY7.
+        affects_version_s $CHAR55.
+        fix_version_s    $CHAR67.
+        hardware_version_used $CHAR8.
+        impact_analysis  $CHAR1.
+        team_found       $CHAR24.
+        root_cause_analysis $CHAR1389.
+        date_closed      MONYY7.
+        severity         $CHAR10.
+        defect_source_type $CHAR32.
+        component_s      $CHAR33. ;
+    INFORMAT
+        project          $CHAR34.
+        key              $CHAR14.
+        issue_type       $CHAR6.
+        status           $CHAR14.
+        priority         $CHAR10.
+        resolution       $CHAR17.
+        created          MONYY18.
+        resolved         MONYY18.
+        affects_version_s $CHAR55.
+        fix_version_s    $CHAR67.
+        hardware_version_used $CHAR8.
+        impact_analysis  $CHAR1.
+        team_found       $CHAR24.
+        root_cause_analysis $CHAR1389.
+        date_closed      MONYY18.
+        severity         $CHAR10.
+        defect_source_type $CHAR32.
+        component_s      $CHAR33. ;
+    INFILE '/production/output/tempwork/SAS_work259A000066BE_v06k100/#LN00022'
+        LRECL=1635
+        ENCODING="LATIN1"
+        TERMSTR=CRLF
+        DLM='7F'x
+        MISSOVER
+        DSD ;
+    INPUT
+        project          : $CHAR34.
+        key              : $CHAR12.
+        issue_type       : $CHAR6.
+        status           : $CHAR14.
+        priority         : $CHAR10.
+        resolution       : $CHAR17.
+        created          : BEST32.
+        resolved         : BEST32.
+        affects_version_s : $CHAR55.
+        fix_version_s    : $CHAR67.
+        hardware_version_used : $CHAR8.
+        impact_analysis  : $CHAR1.
+        team_found       : $CHAR24.
+        root_cause_analysis : $CHAR1389.
+        date_closed      : BEST32.
+        severity         : $CHAR10.
+        defect_source_type : $CHAR32.
+        component_s      : $CHAR33. ;
+    /* ----------------------------------------------------------------
+       For fields that were imported as datetime values but need to be
+       treated as date or time values, a conversion is required in
+       order to extract the date or time portion from the datetime
+       value.
+       ---------------------------------------------------------------- */
+    created = DATEPART(created);
+    resolved = DATEPART(resolved);
+    date_closed = DATEPART(date_closed);
+RUN;
+
+	/* ----------------------------------------------------------------
+		This code pulls in the defect mapping table for joining to 
+		the data file. 
+		--------------------------------------------------------------- */
+		
+DATA WORK.Type_Coding;
+    LENGTH
+        item               8
+        defect_source_type $ 32
+        len                8
+        code               8
+        len_and_code       8
+        right            $ 8
+        code_2             8
+        final_value        8
+        final_value00      8
+        defect_source_type00 $ 32
+        defect_source    $ 13
+        defect_type      $ 24
+        defect_type2     $ 9 ;
+    LABEL
+        item             = "Item"
+        defect_source_type = "Defect Source Type"
+        len              = "Len"
+        code             = "Code"
+        len_and_code     = "Len and code"
+        right            = "Right"
+        code_2           = "Code 2"
+        final_value      = "Final value"
+        final_value00    = "Final value"
+        defect_source_type00 = "Defect Source Type"
+        defect_source    = "Defect Source"
+        defect_type      = "Defect Type"
+        defect_type2     = "Defect Type2" ;
+    FORMAT
+        item             BEST12.
+        defect_source_type $CHAR32.
+        len              BEST12.
+        code             BEST12.
+        len_and_code     BEST12.
+        right            $CHAR8.
+        code_2           BEST12.
+        final_value      BEST12.
+        final_value00    BEST12.
+        defect_source_type00 $CHAR32.
+        defect_source    $CHAR13.
+        defect_type      $CHAR24.
+        defect_type2     $CHAR9. ;
+    INFORMAT
+        item             BEST12.
+        defect_source_type $CHAR32.
+        len              BEST12.
+        code             BEST12.
+        len_and_code     BEST12.
+        right            $CHAR8.
+        code_2           BEST12.
+        final_value      BEST12.
+        final_value00    BEST12.
+        defect_source_type00 $CHAR32.
+        defect_source    $CHAR13.
+        defect_type      $CHAR24.
+        defect_type2     $CHAR9. ;
+    INFILE '/production/output/tempwork/SAS_work259A000066BE_v06k100/#LN00019'
+        LRECL=137
+        ENCODING="LATIN1"
+        TERMSTR=CRLF
+        DLM='7F'x
+        MISSOVER
+        DSD ;
+    INPUT
+        item             : BEST32.
+        defect_source_type : $CHAR32.
+        len              : BEST32.
+        code             : BEST32.
+        len_and_code     : BEST32.
+        right            : $CHAR8.
+        code_2           : BEST32.
+        final_value      : BEST32.
+        final_value00    : BEST32.
+        defect_source_type00 : $CHAR32.
+        defect_source    : $CHAR13.
+        defect_type      : $CHAR24.
+        defect_type2     : $CHAR9. ;
+RUN;
+
+	/*----------------------------------------------------------------
+		This code pulls in the product mapping table to be joined 
+		with the data table. 
+		----------------------------------------------------------------*/
+		
+DATA WORK.Product_Ref;
+    LENGTH
+        key              $ 18
+        product_line     $ 17
+        project          $ 35
+        project_lead     $ 22 ;
+    LABEL
+        key              = "Key"
+        product_line     = "Product Line"
+        project          = "Project"
+        project_lead     = "Project Lead" ;
+    FORMAT
+        key              $CHAR18.
+        product_line     $CHAR17.
+        project          $CHAR35.
+        project_lead     $CHAR22. ;
+    INFORMAT
+        key              $CHAR18.
+        product_line     $CHAR17.
+        project          $CHAR35.
+        project_lead     $CHAR22. ;
+    INFILE '/production/output/tempwork/SAS_work259A000066BE_v06k100/#LN00016'
+        LRECL=78
+        ENCODING="LATIN1"
+        TERMSTR=CRLF
+        DLM='7F'x
+        MISSOVER
+        DSD ;
+    INPUT
+        key              : $CHAR18.
+        product_line     : $CHAR17.
+        project          : $CHAR35.
+        project_lead     : $CHAR22. ;
+RUN;
+
+	/*-----------------------------------------------------------------
+		This pulls in the Business Unit cross refernce table. 
+		----------------------------------------------------------------*/
+		
+DATA WORK.BU_Ref;
+    LENGTH
+        product_line_from_jira $ 17
+        create_product_line_outside_of_j $ 10
+        product_line_common_name $ 17
+        home_bu          $ 5
+        agile_vs__waterfall $ 9 ;
+    LABEL
+        product_line_from_jira = "Product Line from Jira"
+        create_product_line_outside_of_j = "Create product line outside of Jira"
+        product_line_common_name = "Product Line Common Name"
+        home_bu          = "Home BU"
+        agile_vs__waterfall = "Agile vs. Waterfall" ;
+    FORMAT
+        product_line_from_jira $CHAR17.
+        create_product_line_outside_of_j $CHAR10.
+        product_line_common_name $CHAR17.
+        home_bu          $CHAR5.
+        agile_vs__waterfall $CHAR9. ;
+    INFORMAT
+        product_line_from_jira $CHAR17.
+        create_product_line_outside_of_j $CHAR10.
+        product_line_common_name $CHAR17.
+        home_bu          $CHAR5.
+        agile_vs__waterfall $CHAR9. ;
+    INFILE '/production/output/tempwork/SAS_work259A000066BE_v06k100/#LN00013'
+        LRECL=49
+        ENCODING="LATIN1"
+        TERMSTR=CRLF
+        DLM='7F'x
+        MISSOVER
+        DSD ;
+    INPUT
+        product_line_from_jira : $CHAR17.
+        create_product_line_outside_of_j : $CHAR10.
+        product_line_common_name : $CHAR17.
+        home_bu          : $CHAR5.
+        agile_vs__waterfall : $CHAR9. ;
+RUN;
+
+	/*----------------------------------------------------------------
+		This code joins all 4 tables together and does right joins
+		to most of the data to pull in appropriate cross references 
+		into the main data file. 
+		----------------------------------------------------------------*/
+		%_eg_conditional_dropds(WORK.QUERY_FOR_TYPE_CODING);
+
+PROC SQL;
+   CREATE TABLE WORK.QUERY_FOR_TYPE_CODING AS 
+   SELECT t1.item, 
+          t1.defect_source_type, 
+          t1.len, 
+          t1.code, 
+          t1.len_and_code, 
+          t1.right, 
+          t1.code_2, 
+          t1.final_value, 
+          t1.final_value00, 
+          t1.defect_source_type00, 
+          t1.defect_source, 
+          t1.defect_type, 
+          t1.defect_type2, 
+          t2.project, 
+          t2.key, 
+          t2.issue_type, 
+          t2.status, 
+          t2.priority, 
+          t2.resolution, 
+          t2.created, 
+          t2.resolved, 
+          t2.affects_version_s, 
+          t2.fix_version_s, 
+          t2.hardware_version_used, 
+          t2.impact_analysis, 
+          t2.team_found, 
+          t2.root_cause_analysis, 
+          t2.date_closed, 
+          t2.severity, 
+          t2.defect_source_type AS defect_source_type1, 
+          t2.component_s, 
+          t3.key AS key1, 
+          t3.product_line, 
+          t3.project AS project1, 
+          t3.project_lead, 
+          /* Count */
+            (1) AS Count
+      FROM WORK.BU_REF t4
+           RIGHT JOIN (WORK.PRODUCT_REF t3
+           RIGHT JOIN (WORK.TYPE_CODING t1
+           RIGHT JOIN WORK.MOTOROLA___ODART_R4_CLEAN_CHERRY t2 ON (t1.defect_source_type = t2.defect_source_type)) ON 
+          (t3.project = t2.project)) ON (t4.create_product_line_outside_of_j = t3.product_line);
+QUIT;
+
+	/*----------------------------------------------------------------
+		The following code filters and removes any blank projects. 
+		----------------------------------------------------------------*/
+		%_eg_conditional_dropds(WORK.FILTER_FOR_QUERY_FOR_TYPE_CODING);
+
+PROC SQL;
+   CREATE TABLE WORK.FILTER_FOR_QUERY_FOR_TYPE_CODING AS 
+   SELECT t1.item, 
+          t1.defect_source_type, 
+          t1.len, 
+          t1.code, 
+          t1.len_and_code, 
+          t1.right, 
+          t1.code_2, 
+          t1.final_value, 
+          t1.final_value00, 
+          t1.defect_source_type00, 
+          t1.defect_source, 
+          t1.defect_type, 
+          t1.defect_type2, 
+          t1.project, 
+          t1.key, 
+          t1.issue_type, 
+          t1.status, 
+          t1.priority, 
+          t1.resolution, 
+          t1.created, 
+          t1.resolved, 
+          t1.affects_version_s, 
+          t1.fix_version_s, 
+          t1.hardware_version_used, 
+          t1.impact_analysis, 
+          t1.team_found, 
+          t1.root_cause_analysis, 
+          t1.date_closed, 
+          t1.severity, 
+          t1.defect_source_type1, 
+          t1.key1, 
+          t1.product_line, 
+          t1.project1, 
+          t1.project_lead, 
+          t1.Count, 
+          t1.component_s
+      FROM WORK.QUERY_FOR_TYPE_CODING t1;
+QUIT;
+
+	/*----------------------------------------------------------------
+		The following code does the filtering by Team found field. 
+		----------------------------------------------------------------*/
+		%_eg_conditional_dropds(WORK.FILTER_FOR_QUERY_FOR_TYPE_C_0000);
+
+PROC SQL;
+   CREATE TABLE WORK.FILTER_FOR_QUERY_FOR_TYPE_C_0000 AS 
+   SELECT t1.item, 
+          t1.defect_source_type, 
+          t1.len, 
+          t1.code, 
+          t1.len_and_code, 
+          t1.right, 
+          t1.code_2, 
+          t1.final_value, 
+          t1.final_value00, 
+          t1.defect_source_type00, 
+          t1.defect_source, 
+          t1.defect_type, 
+          t1.defect_type2, 
+          t1.project, 
+          t1.key, 
+          t1.issue_type, 
+          t1.status, 
+          t1.priority, 
+          t1.resolution, 
+          t1.created, 
+          t1.resolved, 
+          t1.affects_version_s, 
+          t1.fix_version_s, 
+          t1.hardware_version_used, 
+          t1.impact_analysis, 
+          t1.team_found, 
+          t1.root_cause_analysis, 
+          t1.date_closed, 
+          t1.severity, 
+          t1.defect_source_type1, 
+          t1.key1, 
+          t1.product_line, 
+          t1.project1, 
+          t1.project_lead, 
+          t1.Count, 
+          t1.component_s
+      FROM WORK.FILTER_FOR_QUERY_FOR_TYPE_CODING t1
+      WHERE t1.team_found CONTAINS 'Customer Lab' OR t1.team_found CONTAINS 'SI&T' OR t1.team_found CONTAINS 
+           'Field Trial';
+QUIT;
+
+/* -------------------------------------------------------------------
+   The following code genertes the pareto diagram for all products
+   for all defect codes. 
+   ------------------------------------------------------------------- */
+
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+/* -------------------------------------------------------------------
+   Note: PROC SHEWHART does not support DEVICE=ACTIVEX use PNG.
+   ------------------------------------------------------------------- */
+OPTIONS DEV=PNG;
+/* -------------------------------------------------------------------
+   Sort data set so pareto is in decending order
+   ------------------------------------------------------------------- */
+
+PROC SQL;
+	CREATE VIEW WORK.SORTTempTableSorted AS
+		SELECT T.defect_source_type, T.Count
+	FROM WORK.FILTER_FOR_QUERY_FOR_TYPE_C_0000 as T
+;
+QUIT;
+TITLE;
+TITLE1 "Pareto by Defect Source - All Products";
+FOOTNOTE;
+PROC PARETO DATA = WORK.SORTTempTableSorted
+;
+	VBAR	 defect_source_type/
+	FREQ=Count
+	MAXCMPCT =90
+	CBARS=CX33CCCC
+	CBARLINE=BLACK
+	CCONNECT=BLACK
+	CAXIS=BLACK
+	CFRAME=WHITE
+	WAXIS=1
+	SCALE=COUNT
+	CFRAMENLEG=CYAN
+	NLEGEND
+;
+/* -------------------------------------------------------------------
+   End of the pareto code.
+   ------------------------------------------------------------------- */
+RUN; QUIT;
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+TITLE; FOOTNOTE;
+/* -------------------------------------------------------------------
+   Restoring original device to activeX.
+   ------------------------------------------------------------------- */
+OPTIONS DEV=ACTIVEX;
+
+/* -------------------------------------------------------------------
+   Code to generated paretos by defect codes and products. 
+	Warning: This can go a little crazy if you have a lot of products.
+   ------------------------------------------------------------------- */
+
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+/* -------------------------------------------------------------------
+   PROC SHEWHART also does not support DEVICE=ACTIVEX. 
+   Switch to PNG so it does not go KaPluyeee. 
+   ------------------------------------------------------------------- */
+OPTIONS DEV=PNG;
+/* -------------------------------------------------------------------
+   Sort the data set so the pareto looks pretty and in decending order. 
+   ------------------------------------------------------------------- */
+
+PROC SQL;
+	CREATE VIEW WORK.SORTTempTableSorted AS
+		SELECT T.defect_source_type, T.Count, T.hardware_version_used
+	FROM WORK.FILTER_FOR_QUERY_FOR_TYPE_C_0000 as T
+;
+QUIT;
+TITLE;
+TITLE1 "Pareto analysis of: defect_source_type By Product";
+FOOTNOTE;
+PROC PARETO DATA = WORK.SORTTempTableSorted
+;
+	VBAR	 defect_source_type/
+	FREQ=Count
+	CLASS=(hardware_version_used)
+	MAXCMPCT =90
+	CBARS=CX33CCCC
+	CBARLINE=BLACK
+	CCONNECT=BLACK
+	CAXIS=BLACK
+	CFRAME=WHITE
+	WAXIS=1
+	SCALE=COUNT
+	CFRAMENLEG=CX33CCCC
+	NLEGEND
+	NROWS=2
+	NCOLS=1
+;
+/* -------------------------------------------------------------------
+   End of the pareto code.
+   ------------------------------------------------------------------- */
+RUN; QUIT;
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+TITLE; FOOTNOTE;
+/* -------------------------------------------------------------------
+   Restoring original device type setting so it does not weird out.
+   ------------------------------------------------------------------- */
+OPTIONS DEV=ACTIVEX;
+
+/* -------------------------------------------------------------------
+   This code generates a stacked bar chart of the defects, stacked by
+   severity, with a separate graph for each product.  Again, this 
+   can generate a lot of charts if you have a lot of different products
+   in the input data set.   
+   ------------------------------------------------------------------- */
+
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+/* -------------------------------------------------------------------
+   Sort data set but individual products may have a different ranking
+   of the defects, so these charts will generally not look like pareto
+   charts. 
+   ------------------------------------------------------------------- */
+PROC SORT
+	DATA=WORK.FILTER_FOR_QUERY_FOR_TYPE_C_0000(KEEP=defect_source_type00 severity Count hardware_version_used)
+	OUT=WORK.SORTTempTableSorted
+	;
+	BY hardware_version_used;
+RUN;
+Legend1
+	FRAME
+	POSITION = (MIDDLE RIGHT OUTSIDE)
+	;
+Axis1
+	STYLE=1
+	WIDTH=1
+	MINOR= 
+	(NUMBER=1
+	)
+
+
+;
+Axis2
+	STYLE=1
+	WIDTH=1
+
+
+;
+TITLE;
+TITLE1 "Bar Chart of Defects by Severity & Product";
+FOOTNOTE;
+PROC GCHART DATA=WORK.SORTTempTableSorted
+;
+	VBAR 
+	 defect_source_type00
+ /
+	SUMVAR=Count
+	SUBGROUP=severity
+	CLIPREF
+FRAME	TYPE=SUM
+	LEGEND=LEGEND1
+	COUTLINE=BLACK
+	RAXIS=AXIS1
+	MAXIS=AXIS2
+;
+	BY hardware_version_used;
+/* -------------------------------------------------------------------
+   End of pretty bar chart code. The some clean up. 
+   ------------------------------------------------------------------- */
+RUN; QUIT;
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+TITLE; FOOTNOTE;
+
+/* -------------------------------------------------------------------
+   This Code generates bar charts by Severity and Components affected
+   for each product in the data set. Same warning as before applies. 
+   Lots of products means lots of chart.   
+   ------------------------------------------------------------------- */
+
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+/* -------------------------------------------------------------------
+   Sort data set but it will not work for most of the charts. Hey, but
+   I tried. 
+   ------------------------------------------------------------------- */
+PROC SORT
+	DATA=WORK.FILTER_FOR_QUERY_FOR_TYPE_C_0000(KEEP=defect_source_type00 severity Count hardware_version_used)
+	OUT=WORK.SORTTempTableSorted
+	;
+	BY hardware_version_used;
+RUN;
+Legend1
+	FRAME
+	POSITION = (MIDDLE RIGHT OUTSIDE)
+	;
+Axis1
+	STYLE=1
+	WIDTH=1
+	MINOR= 
+	(NUMBER=1
+	)
+
+
+;
+Axis2
+	STYLE=1
+	WIDTH=1
+
+
+;
+TITLE;
+TITLE1 "Bar Chart of Defects by Severity & Product";
+FOOTNOTE;
+PROC GCHART DATA=WORK.SORTTempTableSorted
+;
+	VBAR 
+	 defect_source_type00
+ /
+	SUMVAR=Count
+	SUBGROUP=severity
+	CLIPREF
+FRAME	TYPE=SUM
+	LEGEND=LEGEND1
+	COUTLINE=BLACK
+	RAXIS=AXIS1
+	MAXIS=AXIS2
+;
+	BY hardware_version_used;
+/* -------------------------------------------------------------------
+   End of code for generating bar charts by component and severity.
+   ------------------------------------------------------------------- */
+RUN; QUIT;
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+TITLE; FOOTNOTE;
+
+/* -------------------------------------------------------------------
+   Now I want to do some box plots by age and defect type, so this 
+   code generates    subtracts the start date of the issue from 
+   the completion date and creates the box plots.
+
+   ------------------------------------------------------------------- */
+
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+/* -------------------------------------------------------------------
+   Sort data set?  I know why?  Just a habit. 
+   ------------------------------------------------------------------- */
+PROC SORT
+	DATA=WORK.FILTER_FOR_QUERY_FOR_TYPE_C_0000(KEEP=defect_source_type00 severity Count hardware_version_used)
+	OUT=WORK.SORTTempTableSorted
+	;
+	BY hardware_version_used;
+RUN;
+Legend1
+	FRAME
+	POSITION = (MIDDLE RIGHT OUTSIDE)
+	;
+Axis1
+	STYLE=1
+	WIDTH=1
+	MINOR= 
+	(NUMBER=1
+	)
+
+
+;
+Axis2
+	STYLE=1
+	WIDTH=1
+
+
+;
+TITLE;
+TITLE1 "Bar Chart of Defects by Severity & Product";
+FOOTNOTE;
+PROC GCHART DATA=WORK.SORTTempTableSorted
+;
+	VBAR 
+	 defect_source_type00
+ /
+	SUMVAR=Count
+	SUBGROUP=severity
+	CLIPREF
+FRAME	TYPE=SUM
+	LEGEND=LEGEND1
+	COUTLINE=BLACK
+	RAXIS=AXIS1
+	MAXIS=AXIS2
+;
+	BY hardware_version_used;
+/* -------------------------------------------------------------------
+   End of yonder code for box plots.
+   ------------------------------------------------------------------- */
+RUN; QUIT;
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+TITLE; FOOTNOTE;
+
+/* -------------------------------------------------------------------
+   Code for box plot by age and software version affected. 
+   ------------------------------------------------------------------- */
+
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+/* -------------------------------------------------------------------
+   Sort data set.
+   ------------------------------------------------------------------- */
+PROC SORT
+	DATA=WORK.FILTER_FOR_QUERY_FOR_TYPE_C_0000(KEEP=defect_source_type00 severity Count hardware_version_used)
+	OUT=WORK.SORTTempTableSorted
+	;
+	BY hardware_version_used;
+RUN;
+Legend1
+	FRAME
+	POSITION = (MIDDLE RIGHT OUTSIDE)
+	;
+Axis1
+	STYLE=1
+	WIDTH=1
+	MINOR= 
+	(NUMBER=1
+	)
+
+
+;
+Axis2
+	STYLE=1
+	WIDTH=1
+
+
+;
+TITLE;
+TITLE1 "Bar Chart of Defects by Severity & Product";
+FOOTNOTE;
+PROC GCHART DATA=WORK.SORTTempTableSorted
+;
+	VBAR 
+	 defect_source_type00
+ /
+	SUMVAR=Count
+	SUBGROUP=severity
+	CLIPREF
+FRAME	TYPE=SUM
+	LEGEND=LEGEND1
+	COUTLINE=BLACK
+	RAXIS=AXIS1
+	MAXIS=AXIS2
+;
+	BY hardware_version_used;
+/* -------------------------------------------------------------------
+   End of code for box plot by age and Software version affected. 
+    ------------------------------------------------------------------- */
+RUN; QUIT;
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+TITLE; FOOTNOTE;
+
+/* -------------------------------------------------------------------
+   Code for generating box plot by age and severity by product. 
+   ------------------------------------------------------------------- */
+
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+/* -------------------------------------------------------------------
+   Sort data set.
+   ------------------------------------------------------------------- */
+PROC SORT
+	DATA=WORK.QUERY_FOR_FILTER_FOR_QUERY_FOR_T(KEEP=severity Age hardware_version_used)
+	OUT=WORK.SORTTempTableSorted
+	;
+	BY hardware_version_used;
+RUN;
+SYMBOL1 	INTERPOL=BOX	VALUE=CIRCLE
+	HEIGHT=1
+	MODE=EXCLUDE
+;
+Axis1
+	STYLE=1
+	WIDTH=1
+	MINOR=NONE
+
+;
+Axis2
+	STYLE=1
+	WIDTH=1
+	MINOR=NONE
+
+;
+TITLE;
+TITLE1 "Box Plot of Age vs. Severity by Product";
+FOOTNOTE;
+PROC GPLOT DATA=WORK.SORTTempTableSorted
+ NOCACHE ;
+	PLOT Age * severity/
+	VAXIS=AXIS1
+
+	HAXIS=AXIS2
+
+;
+	BY hardware_version_used;
+/* -------------------------------------------------------------------
+   End of this box plot code. 
+   ------------------------------------------------------------------- */
+RUN; QUIT;
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+TITLE; FOOTNOTE;
+GOPTIONS RESET = SYMBOL;
+
+/* -------------------------------------------------------------------
+   As of 2/20/13 the following code is not working completely.  It is
+   intended to make a line graph of the number of defects per month
+   by various conditions for each product.   
+   ------------------------------------------------------------------- */
+
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+/* -------------------------------------------------------------------
+   Sort data set, this time by month also. 
+   ------------------------------------------------------------------- */
+PROC SORT
+	DATA=WORK.QUERY_FOR_FILTER_FOR_QUERY_FOR_T(KEEP=severity Age hardware_version_used)
+	OUT=WORK.SORTTempTableSorted
+	;
+	BY hardware_version_used;
+RUN;
+SYMBOL1 	INTERPOL=BOX	VALUE=CIRCLE
+	HEIGHT=1
+	MODE=EXCLUDE
+;
+Axis1
+	STYLE=1
+	WIDTH=1
+	MINOR=NONE
+
+;
+Axis2
+	STYLE=1
+	WIDTH=1
+	MINOR=NONE
+
+;
+TITLE;
+TITLE1 "Box Plot of Age vs. Severity by Product";
+FOOTNOTE;
+PROC GPLOT DATA=WORK.SORTTempTableSorted
+ NOCACHE ;
+	PLOT Age * severity/
+	VAXIS=AXIS1
+
+	HAXIS=AXIS2
+
+;
+	BY hardware_version_used;
+/* -------------------------------------------------------------------
+   End of line graph code, when I get it done. 
+   ------------------------------------------------------------------- */
+RUN; QUIT;
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+TITLE; FOOTNOTE;
+GOPTIONS RESET = SYMBOL;
+
+%_eg_conditional_dropds(WORK.QUERY_FOR_FILTER_FOR_QUERY);
+
+PROC SQL;
+   CREATE TABLE WORK.QUERY_FOR_FILTER_FOR_QUERY AS 
+   SELECT t1.created, 
+          t1.month, 
+          t1.Total
+      FROM WORK.QUERY_FOR_FILTER_FOR_QUERY__0000 t1;
+QUIT;
+
+/* -------------------------------------------------------------------
+   Code for the line graph, not yet finished and debugged. 
+   ------------------------------------------------------------------- */
+
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+SYMBOL1
+	INTERPOL=JOIN
+	HEIGHT=10pt
+	VALUE=NONE
+	LINE=1
+	WIDTH=2
+
+	CV = _STYLE_
+;
+Axis1
+	STYLE=1
+	WIDTH=1
+	MINOR=NONE
+
+
+;
+Axis2
+	STYLE=1
+	WIDTH=1
+	MINOR=NONE
+
+
+;
+TITLE;
+TITLE1 "Line Plot of defects by month and product";
+FOOTNOTE;
+FOOTNOTE1 "";
+PROC SQL;
+CREATE VIEW WORK.SORTTempTableSorted AS
+ SELECT month FORMAT = MONYY7.,
+SUM(Total) AS Total_SUM 
+ FROM WORK.QUERY_FOR_FILTER_FOR_QUERY 
+
+GROUP BY month
+ORDER BY month
+;
+ QUIT;
+PROC GPLOT DATA = WORK.SORTTempTableSorted
+;
+PLOT Total_SUM * month  /
+ 	VAXIS=AXIS1
+
+	HAXIS=AXIS2
+
+FRAME;
+/* -------------------------------------------------------------------
+   End of line graph code. 
+   ------------------------------------------------------------------- */
+RUN; QUIT;
+%_eg_conditional_dropds(WORK.SORTTempTableSorted);
+TITLE; FOOTNOTE;
+GOPTIONS RESET = SYMBOL;
