@@ -3,7 +3,7 @@
    Six Sigma Black Belt
    Google / Motorola / Home....soon to be Arris
    
-   This program generates a Quality drill down report on Jira data. 
+   This program generates a statistical analysis of data. 
    
    Coding started 2/5/13 to 2/20/13
    -------------------------------------------------------------------- */
@@ -14,7 +14,7 @@
    temporary text file were extracted from the Excel source file.
    
    Source file: D:\Profiles\RXJG63.DSA.000\My
-   Documents\Analytics\CenturyLink\Line_Chart_Month.xlsx
+   Documents\Analytics\CL\Line_Chart_Month.xlsx
    Server:      Local File System
    Output data: WORK.Line_Chart_Month 
    -------------------------------------------------------------------- */
@@ -46,11 +46,11 @@ RUN;
 
   /*----------------------------------------------------------------
 	The following code imports the main data file in excel format.  
-	The main data file is a customer Jira - ODART file on Software
+	The main data file is a customer CSV file on Software
 	Defects ran and downloaded to be available to the system. 
 	------------------------------------------------------------------- */
 
-DATA WORK.Motorola___oDART_R4_Clean_Cherry;
+DATA WORK.Company_Analysis.csv;
     LENGTH
         project          $ 34
         key              $ 12
@@ -290,7 +290,7 @@ DATA WORK.Product_Ref;
 RUN;
 
 	/*-----------------------------------------------------------------
-		This pulls in the Business Unit cross refernce table. 
+		This pulls in the  Unit cross refernce table. 
 		----------------------------------------------------------------*/
 		
 DATA WORK.BU_Ref;
